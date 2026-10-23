@@ -1,7 +1,7 @@
 """Build compact GTFS JSON for the Guelph Transit web app.
 Usage: python3 scripts/build_gtfs.py <path-to-unzipped-gtfs> <out-dir>
 """
-import csv, json, sys, os, collections
+import csv, json, sys, os, collections, re
 src, out = sys.argv[1], sys.argv[2]
 rd = lambda n: list(csv.DictReader(open(os.path.join(src, n), encoding='utf-8-sig')))
 def secs(t):
@@ -69,6 +69,13 @@ for tid, rows in st.items():
     if h not in head_idx: head_idx[h] = len(heads); heads.append(h)
     t0 = rows[0][3]; times = [t0] + [rows[i][3]-rows[i-1][3] for i in range(1, len(rows))]
     T.append([pat_idx[key], ti['service_id'], head_idx[h], tid, times])
+# --- routes serving each stop (regular numbered routes only, in number order) -> 5th stop field
+num = lambda rid: (int(re.match(r'\d+', R[rid]['n']).group()), R[rid]['n'])
+serve = collections.defaultdict(set)
+for pt in P:
+    if re.match(r'\d', R[pt['r']]['n']):
+        for si in pt['s']: serve[si].add(pt['r'])
+for i, st_ in enumerate(S): st_.append(sorted(serve[i], key=num))
 os.makedirs(out, exist_ok=True)
 json.dump({'stops': S}, open(os.path.join(out, 'stops.json'), 'w'), separators=(',', ':'))
 json.dump(R, open(os.path.join(out, 'routes.json'), 'w'), separators=(',', ':'))

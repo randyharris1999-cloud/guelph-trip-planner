@@ -28,7 +28,7 @@
     fetch('data/gtfs/routes.json').then(r => r.json()),
     fetch('data/gtfs/route_offsets.json').then(r => r.json()).catch(() => ({}))   // ROW-based lane offsets
   ]);
-  const stops = stopsJ.stops.map(([code, name, lat, lon], i) => ({ i, code, name, lat, lon }));
+  const stops = stopsJ.stops.map(([code, name, lat, lon, rids], i) => ({ i, code, name, lat, lon, routes: (rids || []).map(id => routes[id]).filter(Boolean) }));
   window.APP = { map, stops, routes, layers, offsets };
 
   // Route lines (official route colours), each direction drawn in its own lane with travel arrows
@@ -54,7 +54,7 @@
     for (const s of stops) {
       if (!b.contains([s.lat, s.lon])) continue;
       const m = z >= 16
-        ? L.marker([s.lat, s.lon], { icon: Icons.pin('stop'), pane: 'stops' })
+        ? L.marker([s.lat, s.lon], { icon: Icons.stop(s.routes), pane: 'stops' })
         : L.marker([s.lat, s.lon], { icon: L.divIcon({ className: 'stop-dot', iconSize: [10, 10] }), pane: 'stops' });
       m.bindPopup(Icons.popEl(stopPopup(s))).addTo(layers.stops);
     }

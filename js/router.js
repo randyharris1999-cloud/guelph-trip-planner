@@ -407,7 +407,7 @@
         new L.OffsetLine(line, { pane: 'walk', color: r.c, weight: 7, offsets: off, minPx: 3 }).addTo(L_);
         new L.ArrowLine(line, { pane: 'walk', color: '#fff', weight: 2.2, offsets: off, minPx: 3, size: 3.2, spacing: 70, minZoom: 13 }).addTo(L_);
         line.forEach(x => bounds.extend(x));
-        for (const sidx of [leg.from, leg.to]) { const s = APP.stops[sidx]; L.marker([s.lat, s.lon], { icon: Icons.pin('stop'), pane: 'pins' }).bindPopup(Icons.popEl(`<div class="pop-title">${s.name}</div><span class="muted">Stop #${s.code} · next buses</span><div class="arrivals" data-stopidx="${sidx}"></div>`)).addTo(L_); }
+        for (const sidx of [leg.from, leg.to]) { const s = APP.stops[sidx]; L.marker([s.lat, s.lon], { icon: Icons.stop(s.routes), pane: 'pins' }).bindPopup(Icons.popEl(`<div class="pop-title">${s.name}</div><span class="muted">Stop #${s.code} · next buses</span><div class="arrivals" data-stopidx="${sidx}"></div>`)).addTo(L_); }
         const live = APP.vehicles?.find(v => v.tripId === leg.trip[3]);
         steps.push(`<li class="step ride"><span class="badge" style="background:${r.c};color:#fff">${r.n}</span>
           <div><b>${sched.headsigns[leg.trip[2]]}</b><br><span class="muted">Board ${fmt(leg.dep)} at ${APP.stops[leg.from].name} · ${leg.a - leg.b} stops · get off ${fmt(leg.arr)} at ${APP.stops[leg.to].name}</span>
@@ -422,8 +422,8 @@
     // closest stop highlight
     if (closest) {
       const s = APP.stops[closest[0]];
-      L.marker([s.lat, s.lon], { icon: Icons.pin('stop'), pane: 'pins', zIndexOffset: 500 })
-        .bindTooltip(`Closest stop · ${mins(closest[1])} min`, { permanent: true, direction: 'right', offset: [14, -22], className: 'tip' })
+      L.marker([s.lat, s.lon], { icon: Icons.stop(s.routes), pane: 'pins', zIndexOffset: 500 })
+        .bindTooltip(`Closest stop · ${mins(closest[1])} min`, { permanent: true, direction: 'top', offset: [-14, -14], className: 'tip' })
         .bindPopup(Icons.popEl(`<div class="pop-title">${s.name}</div><span class="muted">Stop #${s.code} · ${mins(closest[1])} min walk</span><div class="arrivals" data-stopidx="${closest[0]}"></div>`)).addTo(L_);
     }
     L.marker([from.lat, from.lon], { icon: Icons.pin('walk'), pane: 'pins', zIndexOffset: 900 }).bindPopup(from.name).addTo(L_);
