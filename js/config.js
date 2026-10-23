@@ -12,7 +12,7 @@ window.CONFIG = {
   // liveBase, e.g. 'https://guelph-transit-feed.yourname.workers.dev'. Leave it empty to use the
   // snapshot files in data/realtime/. A ?feed=<url> query parameter overrides liveBase for testing.
   realtime: {
-    liveBase: '',
+    liveBase: 'https://guelph-trip-planner.randyharris1999.workers.dev',
     snapshot: { vehicles: 'data/realtime/vehiclepositions.pb', alerts: 'data/realtime/alerts.pb' },
     refreshSeconds: 15
   },

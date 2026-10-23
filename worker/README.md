@@ -7,7 +7,7 @@ directly. This Worker fetches it and passes it on with the right header.
 2. **Workers & Pages → Create → Create Worker** (start from "Hello World").
 3. Name it `guelph-transit-feed` → **Deploy**.
 4. **Edit code**, replace everything with `feed-proxy.js`, then **Deploy**.
-5. Copy the Worker address, e.g. `https://guelph-transit-feed.<your-subdomain>.workers.dev`,
+5. Copy the Worker address, e.g. `https://guelph-trip-planner.randyharris1999.workers.dev` (deployed via Workers Builds from this repo — `wrangler.toml`),
    and check `…/vehicles` downloads a small file.
 6. Put that address in `js/config.js` → `realtime.liveBase` (or test first with
    `?feed=<address>` on the app URL).
