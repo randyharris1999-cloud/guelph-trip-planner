@@ -61,7 +61,10 @@ for tid, rows in st.items():
     rows.sort(); ti = trip_info[tid]
     seq = tuple(stop_idx[s] for _, s, _, _ in rows)
     key = (ti['route_id'], seq)
-    if key not in pat_idx: pat_idx[key] = len(P); P.append({'r': ti['route_id'], 's': list(seq)})
+    if key not in pat_idx:
+        shapes_sorted = sorted(route_shapes.get(ti['route_id'], []))
+        sh = shapes_sorted.index(ti['shape_id']) if ti['shape_id'] in shapes_sorted else -1
+        pat_idx[key] = len(P); P.append({'r': ti['route_id'], 's': list(seq), 'sh': sh})
     h = ti['trip_headsign']
     if h not in head_idx: head_idx[h] = len(heads); heads.append(h)
     t0 = rows[0][3]; times = [t0] + [rows[i][3]-rows[i-1][3] for i in range(1, len(rows))]

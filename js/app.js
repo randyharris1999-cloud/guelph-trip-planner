@@ -57,7 +57,7 @@
   async function loadVehicles() {
     try {
       const buf = await fetch(C.realtime.vehicles, { cache: 'no-store' }).then(r => r.arrayBuffer());
-      const feed = GTFSRT.decode(buf); feedTime = feed.timestamp;
+      const feed = GTFSRT.decode(buf); feedTime = feed.timestamp; APP.vehicles = feed.vehicles;
       layers.buses.clearLayers();
       for (const v of feed.vehicles) {
         const r = routes[v.routeId];
@@ -66,7 +66,7 @@
             <span class="muted">Bus ${v.label || v.id}${v.speed ? ' · ' + Math.round(v.speed * 3.6) + ' km/h' : ''}<br>Updated ${fmtTime(v.timestamp)}</span>`)
           .addTo(layers.buses);
       }
-      status(feed.vehicles.length);
+      if (!APP.inTrip) status(feed.vehicles.length);
     } catch (e) { console.error(e); }
   }
   async function loadAlerts() {
@@ -95,6 +95,7 @@
     $('#sheet').classList.toggle('open', on);
     requestAnimationFrame(() => document.documentElement.style.setProperty('--sheet-h', on ? $('#sheet').offsetHeight + 'px' : '0px'));
   }
+  APP.sheet = html => { APP.inTrip = true; $('#sheetBody').innerHTML = html; openSheet(true); };
   await loadAlerts(); await loadVehicles();
   if (C.realtime.refreshSeconds > 0) setInterval(loadVehicles, C.realtime.refreshSeconds * 1000);
 
