@@ -32,7 +32,7 @@
     const txt = (route ? route.n : '?').replace(/\s*U$/, 'U');
     const fg = luminance(c) > 0.55 ? '#1b1b1b' : '#fff';
     const head = bearing != null ? `<span class="h" style="transform:rotate(${bearing}deg);--c:${c}"><i></i></span>` : '';
-    return L.divIcon({ className: 'bus', html: `${head}<span class="b" style="background:${c};color:${fg}">${txt}</span>`, iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -14] });
+    return L.divIcon({ className: 'busmk', html: `${head}<span class="b" style="background:${c};color:${fg}">${txt}</span>`, iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -14] });
   }
   function luminance(hex) {
     const v = parseInt(hex.slice(1), 16), r = v >> 16, gg = (v >> 8) & 255, b = v & 255;

@@ -45,8 +45,7 @@ html,body{margin:0;height:100%;background:#E3E2DE;color:var(--ink);font:15px/1.3
 .dot-to{background:var(--pin-green);--halo:var(--pin-halo)}
 .icon-btn{flex:none;width:34px;height:34px;border:0;border-radius:50%;background:#fff;display:grid;place-items:center;cursor:pointer}
 .icon-btn svg{fill:var(--pin-blue)}
-.divider{position:relative;height:6px;margin-left:22px;border-left:2px dotted #b9bdb9}
-.swap{position:absolute;right:42px;top:-14px;width:30px;height:30px;border-radius:50%;border:0;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15);display:grid;place-items:center;cursor:pointer}
+.divider{height:6px;margin-left:6px;border-left:2px dotted #b9bdb9}
 .swap svg{fill:var(--muted)}
 .go-btn{display:block;width:100%;margin-top:8px;height:40px;border:0;border-radius:20px;background:var(--pin-green);color:#fff;font:600 15px Inter,system-ui,sans-serif;cursor:pointer}
 .go-btn:active{background:var(--pin-green-lo)}
@@ -83,10 +82,10 @@ html,body{margin:0;height:100%;background:#E3E2DE;color:var(--ink);font:15px/1.3
 .pin{width:34px;height:44px}
 .pin svg{display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,.25))}
 .stop-dot{width:10px;height:10px;border-radius:50%;background:var(--pin-green);border:2px solid var(--pin-halo);box-shadow:0 1px 2px rgba(0,0,0,.3)}
-.bus{position:relative;width:30px;height:30px}
-.bus .b{position:absolute;inset:0;border-radius:50%;border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);display:grid;place-items:center;font:700 11px/1 Inter,system-ui,sans-serif;letter-spacing:-.3px}
-.bus .h{position:absolute;left:50%;top:50%;width:0;height:0;transform-origin:0 0}
-.bus .h i{position:absolute;left:-6px;top:-24px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:8px solid var(--c)}
+.busmk{position:relative;width:30px;height:30px}
+.busmk .b{position:absolute;inset:0;border-radius:50%;border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);display:grid;place-items:center;font:700 11px/1 Inter,system-ui,sans-serif;letter-spacing:-.3px}
+.busmk .h{position:absolute;left:50%;top:50%;width:0;height:0;transform-origin:0 0}
+.busmk .h i{position:absolute;left:-6px;top:-24px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:8px solid var(--c)}
 .leaflet-popup-content-wrapper{border-radius:16px;background:var(--pill)}
 .leaflet-popup-content{margin:12px 14px;font:13px/1.4 Inter,system-ui,sans-serif;color:var(--ink)}
 .pop-title{font-weight:600;font-size:14px;margin-bottom:2px}

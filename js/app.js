@@ -41,6 +41,7 @@
   function drawStops() {
     layers.stops.clearLayers();
     const z = map.getZoom(), b = map.getBounds().pad(0.2);
+    if (z < 14) return; // keep the city-wide view clean
     for (const s of stops) {
       if (!b.contains([s.lat, s.lon])) continue;
       const m = z >= 16

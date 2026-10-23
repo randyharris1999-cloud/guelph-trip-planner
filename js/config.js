@@ -1,6 +1,6 @@
 window.CONFIG = {
-  center: [43.5448, -80.2482],   // downtown Guelph
-  zoom: 13,
+  center: [43.5432, -80.2475],   // downtown Guelph (St. George's Square)
+  zoom: 15,
   // City of Guelph open data (ArcGIS REST) — see "Guelph GeoServices.txt"
   gis: {
     addresses: 'https://gismaps.guelph.ca/hosting/rest/services/OpenData/OpenData1/FeatureServer/0',
