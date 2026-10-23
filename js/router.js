@@ -373,13 +373,16 @@
     }
   }
   // tapping any stop shows its next buses
-  APP.map.on('popupopen', e => {
-    const el = e.popup.getElement()?.querySelector('.arrivals'); if (!el) return;
-    el.innerHTML = '<div class="muted">Loading next buses…</div>';
-    refreshArrivals().then(() => e.popup.update());
-  });
-  setInterval(() => { if (!document.hidden) refreshArrivals(true); }, 30000);
-  APP.arrivalsAt = arrivalsAt;
+  (async () => {
+    while (!window.APP || !APP.map || !APP.stops) await new Promise(r => setTimeout(r, 100)); // app.js loads data async
+    APP.map.on('popupopen', e => {
+      const el = e.popup.getElement()?.querySelector('.arrivals'); if (!el) return;
+      el.innerHTML = '<div class="muted">Loading next buses…</div>';
+      refreshArrivals().then(() => e.popup.update()).catch(console.error);
+    });
+    APP.arrivalsAt = arrivalsAt;
+  })();
+  setInterval(() => { if (!document.hidden) refreshArrivals(true).catch(console.error); }, 30000);
 
   // warm up the network in the background so the first trip is quick
   window.addEventListener('load', () => setTimeout(() => { loadGraph().catch(console.error); }, 1500));
