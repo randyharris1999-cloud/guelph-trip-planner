@@ -275,7 +275,7 @@
         L.polyline(line, { pane: 'walk', color: '#fff', weight: 9, opacity: .9 }).addTo(L_);
         L.polyline(line, { pane: 'walk', color: r.c, weight: 6 }).addTo(L_);
         line.forEach(x => bounds.extend(x));
-        for (const sidx of [leg.from, leg.to]) { const s = APP.stops[sidx]; L.marker([s.lat, s.lon], { icon: Icons.pin('stop'), pane: 'pins' }).bindPopup(`<div class="pop-title">${s.name}</div><span class="muted">Stop #${s.code} · next buses</span><div class="arrivals" data-stopidx="${sidx}"></div>`).addTo(L_); }
+        for (const sidx of [leg.from, leg.to]) { const s = APP.stops[sidx]; L.marker([s.lat, s.lon], { icon: Icons.pin('stop'), pane: 'pins' }).bindPopup(Icons.popEl(`<div class="pop-title">${s.name}</div><span class="muted">Stop #${s.code} · next buses</span><div class="arrivals" data-stopidx="${sidx}"></div>`)).addTo(L_); }
         const live = APP.vehicles?.find(v => v.tripId === leg.trip[3]);
         steps.push(`<li class="step ride"><span class="badge" style="background:${r.c};color:#fff">${r.n}</span>
           <div><b>${sched.headsigns[leg.trip[2]]}</b><br><span class="muted">Board ${fmt(leg.dep)} at ${APP.stops[leg.from].name} · ${leg.a - leg.b} stops · get off ${fmt(leg.arr)} at ${APP.stops[leg.to].name}</span>
@@ -292,7 +292,7 @@
       const s = APP.stops[closest[0]];
       L.marker([s.lat, s.lon], { icon: Icons.pin('stop'), pane: 'pins', zIndexOffset: 500 })
         .bindTooltip(`Closest stop · ${mins(closest[1])} min`, { permanent: true, direction: 'right', offset: [14, -22], className: 'tip' })
-        .bindPopup(`<div class="pop-title">${s.name}</div><span class="muted">Stop #${s.code} · ${mins(closest[1])} min walk</span><div class="arrivals" data-stopidx="${closest[0]}"></div>`).addTo(L_);
+        .bindPopup(Icons.popEl(`<div class="pop-title">${s.name}</div><span class="muted">Stop #${s.code} · ${mins(closest[1])} min walk</span><div class="arrivals" data-stopidx="${closest[0]}"></div>`)).addTo(L_);
     }
     L.marker([from.lat, from.lon], { icon: Icons.pin('walk'), pane: 'pins', zIndexOffset: 900 }).bindPopup(from.name).addTo(L_);
     L.marker([to.lat, to.lon], { icon: Icons.pin('dest'), pane: 'pins', zIndexOffset: 900 }).bindPopup(to.name).addTo(L_);

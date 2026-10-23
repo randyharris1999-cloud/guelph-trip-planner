@@ -49,7 +49,7 @@
       const m = z >= 16
         ? L.marker([s.lat, s.lon], { icon: Icons.pin('stop'), pane: 'stops' })
         : L.marker([s.lat, s.lon], { icon: L.divIcon({ className: 'stop-dot', iconSize: [10, 10] }), pane: 'stops' });
-      m.bindPopup(stopPopup(s)).addTo(layers.stops);
+      m.bindPopup(Icons.popEl(stopPopup(s))).addTo(layers.stops);
     }
   }
   map.on('zoomend moveend', drawStops); drawStops();

@@ -38,5 +38,7 @@
     const v = parseInt(hex.slice(1), 16), r = v >> 16, gg = (v >> 8) & 255, b = v & 255;
     return (0.299 * r + 0.587 * gg + 0.114 * b) / 255;
   }
-  g.Icons = { pin, bus, svg };
+  // popup content as a DOM node, so Leaflet's popup.update() keeps live content injected later
+  const popEl = html => { const d = document.createElement('div'); d.innerHTML = html; return d; };
+  g.Icons = { pin, bus, svg, popEl };
 })(window);
