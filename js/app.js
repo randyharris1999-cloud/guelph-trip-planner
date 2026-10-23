@@ -37,8 +37,10 @@
   }
 
   // Stops: green leaf pins when zoomed in, small green dots when zoomed out
-  const stopPopup = s => `<div class="pop-title">${s.name}</div><span class="muted">Stop #${s.code}</span>`;
+  const stopPopup = s => `<div class="pop-title">${s.name}</div><span class="muted">Stop #${s.code} · next buses</span><div class="arrivals" data-stopidx="${s.i}"></div>`;
   function drawStops() {
+    const pop = map._popup; // don't wipe the stop whose popup is open (popup autopan fires moveend)
+    if (pop && map.hasLayer(pop) && pop._source && layers.stops.hasLayer(pop._source)) return;
     layers.stops.clearLayers();
     const z = map.getZoom(), b = map.getBounds().pad(0.2);
     if (z < 14) return; // keep the city-wide view clean

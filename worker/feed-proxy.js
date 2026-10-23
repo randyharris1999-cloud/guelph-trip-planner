@@ -29,8 +29,11 @@ export default {
 
     const r = await fetch(upstream, { cf: { cacheTtl: 10, cacheEverything: true } });
     if (!r.ok) return new Response('Upstream error ' + r.status, { status: 502, headers: cors });
-    return new Response(r.body, {
-      headers: { ...cors, 'Content-Type': 'application/x-protobuf', 'Cache-Control': 'public, max-age=10' }
-    });
+    // trip updates are ~550 KB raw / ~80 KB gzipped — compress for phones
+    const gz = (request.headers.get('Accept-Encoding') || '').includes('gzip');
+    const body = gz ? r.body.pipeThrough(new CompressionStream('gzip')) : r.body;
+    const headers = { ...cors, 'Content-Type': 'application/x-protobuf', 'Cache-Control': 'public, max-age=10' };
+    if (gz) headers['Content-Encoding'] = 'gzip';
+    return new Response(body, { headers, encodeBody: gz ? 'manual' : 'automatic' });
   }
 };

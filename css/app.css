@@ -131,3 +131,20 @@ body.trip .credit{display:none}
 
 .live-dot.pulse{animation:pulse 2s ease-out infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(46,173,94,.55)}70%{box-shadow:0 0 0 9px rgba(46,173,94,0)}100%{box-shadow:0 0 0 0 rgba(46,173,94,0)}}
+
+/* Next-bus arrivals */
+.arrivals{margin-top:6px;min-width:220px}
+.arr{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #ecece9}
+.arr:first-child{border-top:0}
+.arr .badge{flex:none;color:#fff}
+.arr-h{flex:1;min-width:0;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.arr-t{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15}
+.arr-t b{font-size:15px}
+.arr-t small{font-size:10px;color:var(--muted)}
+.is-live{color:var(--pin-green)!important;font-weight:600}
+.arrivals.compact{min-width:0;margin-top:4px}
+.arrivals.compact .arr{padding:3px 0;border:0}
+.closest>div{flex:1;min-width:0}
+.eta{margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.eta-pill{display:inline-block;padding:4px 10px;border-radius:999px;background:#fff;border:1.5px solid #d9dbd8;font-weight:600;font-size:13px}
+.eta-pill.live{border-color:var(--pin-green);background:#EEF8F1;color:#1A7A40}

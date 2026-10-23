@@ -273,11 +273,12 @@
         L.polyline(line, { pane: 'walk', color: '#fff', weight: 9, opacity: .9 }).addTo(L_);
         L.polyline(line, { pane: 'walk', color: r.c, weight: 6 }).addTo(L_);
         line.forEach(x => bounds.extend(x));
-        for (const sidx of [leg.from, leg.to]) { const s = APP.stops[sidx]; L.marker([s.lat, s.lon], { icon: Icons.pin('stop'), pane: 'pins' }).bindPopup(`<div class="pop-title">${s.name}</div><span class="muted">Stop #${s.code}</span>`).addTo(L_); }
+        for (const sidx of [leg.from, leg.to]) { const s = APP.stops[sidx]; L.marker([s.lat, s.lon], { icon: Icons.pin('stop'), pane: 'pins' }).bindPopup(`<div class="pop-title">${s.name}</div><span class="muted">Stop #${s.code} · next buses</span><div class="arrivals" data-stopidx="${sidx}"></div>`).addTo(L_); }
         const live = APP.vehicles?.find(v => v.tripId === leg.trip[3]);
         steps.push(`<li class="step ride"><span class="badge" style="background:${r.c};color:#fff">${r.n}</span>
           <div><b>${sched.headsigns[leg.trip[2]]}</b><br><span class="muted">Board ${fmt(leg.dep)} at ${APP.stops[leg.from].name} · ${leg.a - leg.b} stops · get off ${fmt(leg.arr)} at ${APP.stops[leg.to].name}</span>
-          ${live ? `<br><span class="live">● Bus ${live.label || live.id} on this trip</span>` : ''}</div></li>`);
+          ${live ? `<br><span class="live">● Bus ${live.label || live.id} on this trip</span>` : ''}
+          <div class="eta" data-trip="${leg.trip[3]}" data-stop="${APP.stops[leg.from].code}" data-sched="${leg.dep}"></div></div></li>`);
       }
       steps.push(stepWalk(`Walk to <b>${to.name}</b>`, plan.egressSec, fmt(plan.arr)));
     } else {
@@ -289,7 +290,7 @@
       const s = APP.stops[closest[0]];
       L.marker([s.lat, s.lon], { icon: Icons.pin('stop'), pane: 'pins', zIndexOffset: 500 })
         .bindTooltip(`Closest stop · ${mins(closest[1])} min`, { permanent: true, direction: 'right', offset: [14, -22], className: 'tip' })
-        .bindPopup(`<div class="pop-title">${s.name}</div><span class="muted">Stop #${s.code} · ${mins(closest[1])} min walk</span>`).addTo(L_);
+        .bindPopup(`<div class="pop-title">${s.name}</div><span class="muted">Stop #${s.code} · ${mins(closest[1])} min walk</span><div class="arrivals" data-stopidx="${closest[0]}"></div>`).addTo(L_);
     }
     L.marker([from.lat, from.lon], { icon: Icons.pin('walk'), pane: 'pins', zIndexOffset: 900 }).bindPopup(from.name).addTo(L_);
     L.marker([to.lat, to.lon], { icon: Icons.pin('dest'), pane: 'pins', zIndexOffset: 900 }).bindPopup(to.name).addTo(L_);
@@ -299,16 +300,87 @@
     const legsBadges = useTransit ? plan.legs.filter(l => l.type === 'ride').map(l => { const r = APP.routes[sched.patterns[l.p].r]; return `<span class="badge" style="background:${r.c};color:#fff">${r.n}</span>`; }).join('<span class="chev">›</span>') : '<span class="muted">Walk only</span>';
     APP.sheet(`<div class="sum"><div><div class="big">${mins(arr - t0)} min <span class="legs">${legsBadges}</span></div><span class="muted">${fmt(t0)} → ${fmt(arr)}</span></div>
       <label class="dep">Leave at <input type="time" id="depTime" value="${new Date((t0 % 86400) * 1000).toISOString().slice(11, 16)}"></label></div>
-      ${cs ? `<div class="closest"><span class="lg-pin">${Icons.svg('stop', 18, 23)}</span>Closest stop: <b>${cs.name}</b> #${cs.code} · ${mins(closest[1])} min walk</div>` : ''}
+      ${cs ? `<div class="closest"><span class="lg-pin">${Icons.svg('stop', 18, 23)}</span><div>Closest stop: <b>${cs.name}</b> #${cs.code} · ${mins(closest[1])} min walk<div class="arrivals compact" data-stopidx="${closest[0]}" data-n="2"></div></div></div>` : ''}
       <ol class="steps">${steps.join('')}</ol>
       <div class="muted shed-note"><span class="shed-swatch"></span>Shaded area = everywhere within a ${C.walkshedMinutes}-minute walk of your start (streets + trails).</div>
       <button class="go-btn ghost" id="clearTrip">Clear trip</button>`, true);
     $('#depTime').onchange = e => { const [h, m] = e.target.value.split(':'); APP.departSecs = +h * 3600 + +m * 60; window.planTrip(from, to); };
     map.fitBounds(bounds, { paddingTopLeft: [20, $('#planner').offsetHeight + 60], paddingBottomRight: [60, $('#sheet').offsetHeight + 20] });
+    refreshArrivals(true);
   };
   function stepWalk(html, sec, time) {
     return `<li class="step walk"><span class="walk-ico">${Icons.svg('walk', 20, 26)}</span><div>${html}<br><span class="muted">${mins(sec)} min walk${time ? ' · ' + time : ''}</span></div></li>`;
   }
+
+  // ------------------------------------------------------------ live arrivals ("bus in N min")
+  const liveBase = (new URLSearchParams(location.search).get('feed') || C.realtime.liveBase || '').replace(/\/$/, '');
+  let preds = { trips: new Map(), at: 0 }, dayCache = null;
+  async function getPreds(force) {
+    if (!liveBase || (!force && Date.now() - preds.at < 20000)) return preds;
+    try {
+      const f = GTFSRT.decode(await fetch(liveBase + '/tripupdates', { cache: 'no-store' }).then(r => { if (!r.ok) throw r.status; return r.arrayBuffer(); }));
+      preds = { trips: f.trips, at: Date.now() };
+    } catch (e) { console.warn('Trip updates unavailable', e); }
+    return preds;
+  }
+  function tripsByPattern(day) {
+    if (dayCache && dayCache.ymd === day.ymd) return dayCache.byPat;
+    const svc = activeServices(day.ymd, day.dow), byPat = sched.patterns.map(() => []);
+    sched.trips.forEach(t => { if (svc.has(t[1])) byPat[t[0]].push(t); });
+    dayCache = { ymd: day.ymd, byPat }; return byPat;
+  }
+  async function arrivalsAt(stopIdx, n = 4, horizonMin = 90) {
+    await loadSchedule(); await getPreds();
+    const day = torontoNow(), nowE = Date.now() / 1000, midnight = nowE - day.secs, code = APP.stops[stopIdx].code;
+    const byPat = tripsByPattern(day), out = [];
+    for (const [p, i] of sched.stopPats[stopIdx]) {
+      const pat = sched.patterns[p]; if (i === pat.s.length - 1) continue; // terminus: bus ends here
+      for (const t of byPat[p]) {
+        const schedE = midnight + t.abs[i];
+        if (schedE < nowE - 1800 || schedE > nowE + horizonMin * 60 + 1800) continue;
+        const pr = preds.trips.get(t[3])?.stops.get(code);
+        if (pr?.skip) continue;
+        const when = pr?.time || schedE, eta = (when - nowE) / 60;
+        if (eta < -0.5 || eta > horizonMin) continue;
+        out.push({ r: APP.routes[pat.r], head: sched.headsigns[t[2]], eta, live: !!pr?.time, late: pr?.time ? (pr.time - schedE) / 60 : 0, when });
+      }
+    }
+    return out.sort((a, b) => a.eta - b.eta).slice(0, n);
+  }
+  const etaTxt = m => m < 1 ? 'Now' : Math.round(m) + ' min';
+  const lateTxt = l => Math.abs(l) < 1 ? 'on time' : Math.round(Math.abs(l)) + ' min ' + (l > 0 ? 'late' : 'early');
+  function arrivalRows(list) {
+    if (!list.length) return '<div class="muted">No buses in the next 90 min</div>';
+    return list.map(a => `<div class="arr"><span class="badge" style="background:${a.r.c};color:#fff">${a.r.n}</span>
+      <span class="arr-h">${a.head.replace(/^\S+\s/, '')}</span>
+      <span class="arr-t"><b>${etaTxt(a.eta)}</b><small class="${a.live ? 'is-live' : ''}">${a.live ? '● live · ' + lateTxt(a.late) : 'scheduled'}</small></span></div>`).join('');
+  }
+  async function refreshArrivals(force) {
+    const boxes = document.querySelectorAll('.arrivals[data-stopidx], .eta[data-trip]');
+    if (!boxes.length) return;
+    await loadSchedule(); await getPreds(force);
+    const day = torontoNow(), nowE = Date.now() / 1000, midnight = nowE - day.secs;
+    for (const el of boxes) {
+      if (el.classList.contains('eta')) {
+        const schedE = midnight + +el.dataset.sched, pr = preds.trips.get(el.dataset.trip)?.stops.get(el.dataset.stop);
+        const when = pr?.time || schedE, eta = (when - nowE) / 60;
+        el.innerHTML = eta < -1 ? '<span class="muted">This bus has left — re-plan for the next one</span>'
+          : `<span class="eta-pill${pr?.time ? ' live' : ''}">🚌 ${eta < 1 ? 'Bus arriving now' : 'Bus arrives in ' + Math.round(eta) + ' min'}</span>
+             <small class="${pr?.time ? 'is-live' : 'muted'}">${pr?.time ? '● live · ' + lateTxt((pr.time - schedE) / 60) : 'scheduled time'}</small>`;
+      } else {
+        el.innerHTML = arrivalRows(await arrivalsAt(+el.dataset.stopidx, +(el.dataset.n || 4)));
+      }
+    }
+  }
+  // tapping any stop shows its next buses
+  APP.map.on('popupopen', e => {
+    const el = e.popup.getElement()?.querySelector('.arrivals'); if (!el) return;
+    el.innerHTML = '<div class="muted">Loading next buses…</div>';
+    refreshArrivals().then(() => e.popup.update());
+  });
+  setInterval(() => { if (!document.hidden) refreshArrivals(true); }, 30000);
+  APP.arrivalsAt = arrivalsAt;
+
   // warm up the network in the background so the first trip is quick
   window.addEventListener('load', () => setTimeout(() => { loadGraph().catch(console.error); }, 1500));
 })();
