@@ -146,6 +146,8 @@
     }
     return on;
   }
+  // live trip updates can mark stops as skipped (detours / closures) — never board or alight there
+  const skipped = (trip, stopIdx) => !!preds.trips.get(trip[3])?.stops.get(APP.stops[stopIdx].code)?.skip;
   function raptor(access, egress, t0, day) {
     const svc = activeServices(day.ymd, day.dow);
     const N = APP.stops.length, K = 3;
@@ -167,11 +169,11 @@
           const s = stops[i];
           if (trip) {
             const arr = trip.abs[i];
-            if (arr < best[s] && arr < tau[k][s]) { tau[k][s] = best[s] = arr; par[k][s] = { type: 'ride', p, trip, b: bIdx, a: i }; newly.add(s); }
+            if (arr < best[s] && arr < tau[k][s] && !skipped(trip, s)) { tau[k][s] = best[s] = arr; par[k][s] = { type: 'ride', p, trip, b: bIdx, a: i }; newly.add(s); }
           }
           const ready = tau[k - 1][s] + BOARD_SLACK;
           if (ready < Infinity && (!trip || ready <= trip.abs[i])) {
-            const t = patTrips[p].find(t => t.abs[i] >= ready && i < stops.length - 1);
+            const t = patTrips[p].find(t => t.abs[i] >= ready && i < stops.length - 1 && !skipped(t, s));
             if (t && t !== trip) { trip = t; bIdx = i; }
           }
         }
@@ -237,7 +239,7 @@
   window.planTrip = async function (from, to) {
     const L_ = APP.layers.trip, map = APP.map;
     APP.sheet(`<div class="status"><span class="spinner"></span><div><b>Planning your trip…</b><br><span class="muted">Loading City streets &amp; trails</span></div></div>`);
-    await Promise.all([loadGraph(), loadSchedule()]);
+    await Promise.all([loadGraph(), loadSchedule(), getPreds()]);
     const o = snap(from.lat, from.lon), d = snap(to.lat, to.lon);
     const fromRes = dijkstra(o, Math.max(MAX_ACCESS_M, SHED_M) + 50);
     const toRes = dijkstra(d, MAX_ACCESS_M);
@@ -332,26 +334,27 @@
   async function arrivalsAt(stopIdx, n = 4, horizonMin = 90) {
     await loadSchedule(); await getPreds();
     const day = torontoNow(), nowE = Date.now() / 1000, midnight = nowE - day.secs, code = APP.stops[stopIdx].code;
-    const byPat = tripsByPattern(day), out = [];
+    const byPat = tripsByPattern(day), out = []; out.skipped = new Set();
     for (const [p, i] of sched.stopPats[stopIdx]) {
       const pat = sched.patterns[p]; if (i === pat.s.length - 1) continue; // terminus: bus ends here
       for (const t of byPat[p]) {
         const schedE = midnight + t.abs[i];
         if (schedE < nowE - 1800 || schedE > nowE + horizonMin * 60 + 1800) continue;
         const pr = preds.trips.get(t[3])?.stops.get(code);
-        if (pr?.skip) continue;
+        if (pr?.skip) { if (schedE >= nowE - 60 && schedE <= nowE + horizonMin * 60) out.skipped.add(APP.routes[pat.r]); continue; }
         const when = pr?.time || schedE, eta = (when - nowE) / 60;
         if (eta < -0.5 || eta > horizonMin) continue;
         out.push({ r: APP.routes[pat.r], head: sched.headsigns[t[2]], eta, live: !!pr?.time, late: pr?.time ? (pr.time - schedE) / 60 : 0, when });
       }
     }
-    return out.sort((a, b) => a.eta - b.eta).slice(0, n);
+    const res = out.sort((a, b) => a.eta - b.eta).slice(0, n); res.skipped = out.skipped; return res;
   }
   const etaTxt = m => m < 1 ? 'Now' : Math.round(m) + ' min';
   const lateTxt = l => Math.abs(l) < 1 ? 'on time' : Math.round(Math.abs(l)) + ' min ' + (l > 0 ? 'late' : 'early');
   function arrivalRows(list) {
-    if (!list.length) return '<div class="muted">No buses in the next 90 min</div>';
-    return list.map(a => `<div class="arr"><span class="badge" style="background:${a.r.c};color:#fff">${a.r.n}</span>
+    const sk = list.skipped && list.skipped.size ? `<div class="skip-note">⚠ ${[...list.skipped].map(r => `<span class="badge" style="background:${r.c};color:#fff">${r.n}</span>`).join(' ')} ${list.length ? 'is' : 'are'} skipping this stop right now (detour / closure)</div>` : '';
+    if (!list.length) return sk || '<div class="muted">No buses in the next 90 min</div>';
+    return sk + list.map(a => `<div class="arr"><span class="badge" style="background:${a.r.c};color:#fff">${a.r.n}</span>
       <span class="arr-h">${a.head.replace(/^\S+\s/, '')}</span>
       <span class="arr-t"><b>${etaTxt(a.eta)}</b><small class="${a.live ? 'is-live' : ''}">${a.live ? '● live · ' + lateTxt(a.late) : 'scheduled'}</small></span></div>`).join('');
   }
