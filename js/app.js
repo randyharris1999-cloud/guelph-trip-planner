@@ -10,7 +10,7 @@
   }).addTo(map);
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-  const panes = { routes: 410, trails: 405, walk: 420, stops: 610, buses: 640, pins: 660 };
+  const panes = { routes: 410, trails: 405, walk: 420, stops: 610, buses: 640, me: 650, pins: 660 };
   for (const [k, z] of Object.entries(panes)) map.createPane(k).style.zIndex = z;
 
   const layers = {
@@ -216,8 +216,50 @@
     const f = $('#fromInput').value; $('#fromInput').value = $('#toInput').value; $('#toInput').value = f;
     [sel.from, sel.to] = [sel.to, sel.from]; drawEnds();
   };
-  $('#locateBtn').onclick = () => map.locate({ setView: true, maxZoom: 16 });
-  map.on('locationfound', e => { sel.from = { name: 'My location', lat: e.latlng.lat, lon: e.latlng.lng }; $('#fromInput').value = 'My location'; drawEnds(); });
+  // ---------- Live location: blue dot + accuracy ring that follows you ----------
+  // Tap the locate button: start tracking, use your position as the trip start, and follow you.
+  // Drag the map to stop following; tap the button again to re-centre and follow.
+  const me = { watch: null, follow: false, dot: null, ring: null, last: null };
+  function meIcon(heading) {
+    const h = heading != null && !isNaN(heading) ? `<span class="me-head" style="transform:rotate(${heading}deg)"></span>` : '';
+    return L.divIcon({ className: 'me', html: `${h}<span class="me-dot"></span>`, iconSize: [22, 22], iconAnchor: [11, 11] });
+  }
+  function onFix(p) {
+    const ll = [p.coords.latitude, p.coords.longitude], first = !me.last;
+    me.last = { lat: ll[0], lon: ll[1], acc: p.coords.accuracy, t: p.timestamp };
+    if (!me.dot) {
+      me.ring = L.circle(ll, { pane: 'me', radius: p.coords.accuracy, color: '#3A7AEB', weight: 1, fillColor: '#3A7AEB', fillOpacity: .12, interactive: false }).addTo(map);
+      me.dot = L.marker(ll, { icon: meIcon(p.coords.heading), pane: 'me', zIndexOffset: 2000, keyboard: false })
+        .bindPopup(() => `<div class="pop-title">You are here</div><span class="muted">±${Math.round(me.last.acc)} m · ${fmtTime(me.last.t / 1000, true)}</span>`).addTo(map);
+    } else {
+      glide(me.dot, ll, 800); me.ring.setLatLng(ll).setRadius(p.coords.accuracy);
+      me.dot.setIcon(meIcon(p.coords.heading));
+    }
+    if (first) {
+      sel.from = { name: 'My location', lat: ll[0], lon: ll[1] }; $('#fromInput').value = 'My location'; drawEnds();
+      map.setView(ll, Math.max(map.getZoom(), 16));
+    } else if (me.follow) map.panTo(ll, { animate: true });
+    if (sel.from && sel.from.name === 'My location' && !APP.inTrip) { sel.from.lat = ll[0]; sel.from.lon = ll[1]; }
+  }
+  function onFixError(e) {
+    $('#locateBtn').classList.remove('on', 'follow');
+    if (me.watch !== null) navigator.geolocation.clearWatch(me.watch); me.watch = null;
+    alertSheet(e.code === 1 ? 'Location is blocked. Allow location for this site in your browser settings, then tap the locate button again.'
+      : 'Couldn\'t get your location right now. Try again in a moment.');
+  }
+  const setFollow = on => { me.follow = on; $('#locateBtn').classList.toggle('follow', on); };
+  $('#locateBtn').onclick = () => {
+    if (!('geolocation' in navigator)) return alertSheet('This browser can\'t share your location.');
+    if (me.watch === null) {
+      $('#locateBtn').classList.add('on');
+      me.watch = navigator.geolocation.watchPosition(onFix, onFixError, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+    } else if (me.last) {
+      sel.from = { name: 'My location', lat: me.last.lat, lon: me.last.lon }; $('#fromInput').value = 'My location';
+      map.setView([me.last.lat, me.last.lon], Math.max(map.getZoom(), 16));
+    }
+    setFollow(true);
+  };
+  map.on('dragstart', () => setFollow(false));
   $('#goBtn').onclick = async () => {
     const a = await resolve('from', $('#fromInput')), b = await resolve('to', $('#toInput'));
     if (!a || !b) { alertSheet('Choose a start and a destination address in Guelph.'); return; }

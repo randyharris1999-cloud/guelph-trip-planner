@@ -150,3 +150,12 @@ body.trip .credit{display:none}
 .eta-pill.live{border-color:var(--pin-green);background:#EEF8F1;color:#1A7A40}
 .skip-note{margin:4px 0 2px;padding:6px 8px;border-radius:10px;background:#FFF4E0;color:#7A4B00;font-size:12px;line-height:1.5}
 .skip-note .badge{font-size:11px;padding:1px 5px}
+/* live location: blue dot with white rim, pulsing halo, heading wedge, accuracy ring drawn by Leaflet */
+.me{position:relative}
+.me-dot{position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:var(--pin-blue);border:3px solid #fff;box-sizing:border-box;box-shadow:0 1px 4px rgba(0,0,0,.35);animation:mepulse 2s infinite}
+.me-head{position:absolute;left:0;top:0;width:22px;height:22px;transform-origin:50% 50%}
+.me-head::before{content:"";position:absolute;left:5px;top:-9px;border:6px solid transparent;border-bottom:12px solid rgba(58,122,235,.55);border-top:0}
+@keyframes mepulse{0%{box-shadow:0 0 0 0 rgba(58,122,235,.5),0 1px 4px rgba(0,0,0,.35)}70%{box-shadow:0 0 0 12px rgba(58,122,235,0),0 1px 4px rgba(0,0,0,.35)}100%{box-shadow:0 0 0 0 rgba(58,122,235,0),0 1px 4px rgba(0,0,0,.35)}}
+#locateBtn.on svg{fill:var(--pin-blue)}
+#locateBtn.follow{background:var(--pin-blue)}
+#locateBtn.follow svg{fill:#fff}
