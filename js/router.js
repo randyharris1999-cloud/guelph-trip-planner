@@ -352,7 +352,7 @@
   const etaTxt = m => m < 1 ? 'Now' : Math.round(m) + ' min';
   const lateTxt = l => Math.abs(l) < 1 ? 'on time' : Math.round(Math.abs(l)) + ' min ' + (l > 0 ? 'late' : 'early');
   function arrivalRows(list) {
-    const sk = list.skipped && list.skipped.size ? `<div class="skip-note">⚠ ${[...list.skipped].map(r => `<span class="badge" style="background:${r.c};color:#fff">${r.n}</span>`).join(' ')} ${list.length ? 'is' : 'are'} skipping this stop right now (detour / closure)</div>` : '';
+    const sk = list.skipped && list.skipped.size ? `<div class="skip-note">⚠ ${[...list.skipped].map(r => `<span class="badge" style="background:${r.c};color:#fff">${r.n}</span>`).join(' ')} buses are skipping this stop right now (detour / closure)</div>` : '';
     if (!list.length) return sk || '<div class="muted">No buses in the next 90 min</div>';
     return sk + list.map(a => `<div class="arr"><span class="badge" style="background:${a.r.c};color:#fff">${a.r.n}</span>
       <span class="arr-h">${a.head.replace(/^\S+\s/, '')}</span>
