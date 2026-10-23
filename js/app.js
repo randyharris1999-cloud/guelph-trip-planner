@@ -52,35 +52,63 @@
   }
   map.on('zoomend moveend', drawStops); drawStops();
 
-  // ---------- Realtime (snapshot now, live later) ----------
-  let feedTime = 0, alerts = [];
+  // ---------- Realtime: live via Cloudflare Worker relay, snapshot as fallback ----------
+  const liveBase = (new URLSearchParams(location.search).get('feed') || C.realtime.liveBase || '').replace(/\/$/, '');
+  let feedTime = 0, alerts = [], isLive = false, lastOk = 0;
+  const busMarkers = new Map();
+  async function getFeed(kind) {
+    if (liveBase) {
+      try {
+        const r = await fetch(`${liveBase}/${kind}`, { cache: 'no-store' });
+        if (!r.ok) throw new Error(r.status);
+        return { feed: GTFSRT.decode(await r.arrayBuffer()), live: true };
+      } catch (e) { console.warn('Live feed unavailable, using snapshot', e); }
+    }
+    const r = await fetch(C.realtime.snapshot[kind], { cache: 'no-store' });
+    return { feed: GTFSRT.decode(await r.arrayBuffer()), live: false };
+  }
+  const busPopup = (v, r) => `<div class="pop-title"><span class="badge" style="background:${r ? r.c : '#999'};color:#fff">${r ? r.n : '?'}</span> ${r ? r.name : 'Unknown route'}</div>
+    <span class="muted">Bus ${v.label || v.id}${v.speed ? ' · ' + Math.round(v.speed * 3.6) + ' km/h' : ''}<br>Position at ${fmtTime(v.timestamp, true)}</span>`;
+  function glide(m, to, ms = 1200) {
+    const from = m.getLatLng(), t0 = performance.now();
+    if (from.distanceTo(to) > 1500) { m.setLatLng(to); return; }
+    const step = now => { const k = Math.min(1, (now - t0) / ms), e = k * (2 - k);
+      m.setLatLng([from.lat + (to[0] - from.lat) * e, from.lng + (to[1] - from.lng) * e]); if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  }
   async function loadVehicles() {
     try {
-      const buf = await fetch(C.realtime.vehicles, { cache: 'no-store' }).then(r => r.arrayBuffer());
-      const feed = GTFSRT.decode(buf); feedTime = feed.timestamp; APP.vehicles = feed.vehicles;
-      layers.buses.clearLayers();
+      const { feed, live } = await getFeed('vehicles');
+      feedTime = feed.timestamp; isLive = live; lastOk = Date.now(); APP.vehicles = feed.vehicles;
+      const seen = new Set();
       for (const v of feed.vehicles) {
-        const r = routes[v.routeId];
-        L.marker([v.lat, v.lon], { icon: Icons.bus(r, v.bearing), pane: 'buses', zIndexOffset: 1000 })
-          .bindPopup(`<div class="pop-title"><span class="badge" style="background:${r ? r.c : '#999'};color:#fff">${r ? r.n : '?'}</span> ${r ? r.name : 'Unknown route'}</div>
-            <span class="muted">Bus ${v.label || v.id}${v.speed ? ' · ' + Math.round(v.speed * 3.6) + ' km/h' : ''}<br>Updated ${fmtTime(v.timestamp)}</span>`)
-          .addTo(layers.buses);
+        const r = routes[v.routeId], key = v.id; seen.add(key);
+        const sig = (r ? r.n : '?') + '|' + Math.round((v.bearing || 0) / 15);
+        let m = busMarkers.get(key);
+        if (!m) {
+          m = L.marker([v.lat, v.lon], { icon: Icons.bus(r, v.bearing), pane: 'buses', zIndexOffset: 1000 }).addTo(layers.buses);
+          busMarkers.set(key, m);
+        } else {
+          glide(m, [v.lat, v.lon]);
+          if (m._sig !== sig) m.setIcon(Icons.bus(r, v.bearing));
+        }
+        m._sig = sig; m.bindPopup(busPopup(v, r));
       }
+      for (const [k, m] of busMarkers) if (!seen.has(k)) { layers.buses.removeLayer(m); busMarkers.delete(k); }
       if (!APP.inTrip) status(feed.vehicles.length);
     } catch (e) { console.error(e); }
   }
   async function loadAlerts() {
-    try { alerts = GTFSRT.decode(await fetch(C.realtime.alerts).then(r => r.arrayBuffer())).alerts; } catch (e) { alerts = []; }
+    try { alerts = (await getFeed('alerts')).feed.alerts; } catch (e) { alerts = []; }
   }
-  const fmtTime = t => new Date(t * 1000).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
+  const fmtTime = (t, sec) => new Date(t * 1000).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', ...(sec ? { second: '2-digit' } : {}), timeZone: 'America/Toronto' });
   function status(n) {
-    const live = C.realtime.refreshSeconds > 0;
-    $('#sheetBody').innerHTML = `<div class="status"><span class="live-dot" style="background:${live ? '#2EAD5E' : '#E8A33A'}"></span>
-      <div><b>${n} buses</b> · ${live ? 'live' : 'snapshot'} ${fmtTime(feedTime)}${alerts.length ? ` · <a href="#" id="alertsLink">${alerts.length} service alerts</a>` : ''}<br>
-      <span class="muted">Enter a start and destination to plan a trip.</span></div></div>`;
+    $('#sheetBody').innerHTML = `<div class="status"><span class="live-dot${isLive ? ' pulse' : ''}" style="background:${isLive ? '#2EAD5E' : '#E8A33A'}"></span>
+      <div><b>${n} buses</b> · ${isLive ? 'live' : 'snapshot'} ${fmtTime(feedTime, isLive)}${alerts.length ? ` · <a href="#" id="alertsLink">${alerts.length} service alerts</a>` : ''}<br>
+      <span class="muted">${isLive ? `Updates every ${C.realtime.refreshSeconds} s. ` : ''}Enter a start and destination to plan a trip.</span></div></div>`;
     openSheet(true);
     const a = $('#alertsLink'); if (a) a.onclick = e => { e.preventDefault(); showAlerts(); };
-    $('#feedInfo').textContent = `Bus positions: ${live ? 'live feed' : 'snapshot from ' + new Date(feedTime * 1000).toLocaleString('en-CA', { timeZone: 'America/Toronto' })}.`;
+    $('#feedInfo').textContent = `Bus positions: ${isLive ? 'live Guelph Transit feed' : 'snapshot from ' + new Date(feedTime * 1000).toLocaleString('en-CA', { timeZone: 'America/Toronto' })}.`;
   }
   function showAlerts() {
     const seen = new Set();
@@ -112,7 +140,12 @@
   $('#sheet').addEventListener('touchend', e => { if (y0 === null) return; const dy = e.changedTouches[0].clientY - y0; y0 = null;
     if (Math.abs(dy) > 40 && APP.inTrip) { $('#sheet').classList.toggle('collapsed', dy > 0); openSheet(true); } });
   await loadAlerts(); await loadVehicles();
-  if (C.realtime.refreshSeconds > 0) setInterval(loadVehicles, C.realtime.refreshSeconds * 1000);
+  if (liveBase && C.realtime.refreshSeconds > 0) {
+    // poll while the page is visible; refresh immediately when the phone comes back to the app
+    setInterval(() => { if (!document.hidden) loadVehicles(); }, C.realtime.refreshSeconds * 1000);
+    setInterval(() => { if (!document.hidden) loadAlerts(); }, 120000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - lastOk > 5000) loadVehicles(); });
+  }
 
   // ---------- Trails (City of Guelph, live service) ----------
   let trailsLoaded = false;

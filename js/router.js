@@ -277,7 +277,7 @@
         const live = APP.vehicles?.find(v => v.tripId === leg.trip[3]);
         steps.push(`<li class="step ride"><span class="badge" style="background:${r.c};color:#fff">${r.n}</span>
           <div><b>${sched.headsigns[leg.trip[2]]}</b><br><span class="muted">Board ${fmt(leg.dep)} at ${APP.stops[leg.from].name} · ${leg.a - leg.b} stops · get off ${fmt(leg.arr)} at ${APP.stops[leg.to].name}</span>
-          ${live ? `<br><span class="live">● Bus ${live.label || live.id} on this trip (snapshot)</span>` : ''}</div></li>`);
+          ${live ? `<br><span class="live">● Bus ${live.label || live.id} on this trip</span>` : ''}</div></li>`);
       }
       steps.push(stepWalk(`Walk to <b>${to.name}</b>`, plan.egressSec, fmt(plan.arr)));
     } else {

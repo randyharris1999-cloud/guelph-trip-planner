@@ -4,7 +4,8 @@ Mobile web app (Leaflet) for planning walk + bus trips in Guelph, Ontario.
 
 * **Streets, trails, addresses** – City of Guelph Open Data (ArcGIS REST, loaded live).
 * **Transit** – Guelph Transit GTFS (`data/gtfs/*.json`, built with `scripts/build_gtfs.py`).
-* **Bus positions & alerts** – GTFS-Realtime snapshot in `data/realtime/*.pb` (decoded in the browser by `js/gtfsrt.js`). To go live, point `CONFIG.realtime` in `js/config.js` at a CORS proxy for the Guelph Transit feed and set `refreshSeconds`.
+* **Bus positions & alerts** – live Guelph Transit GTFS-Realtime feed via a Cloudflare Worker relay (`worker/`), refreshed every 15 s and decoded in the browser by `js/gtfsrt.js`. Falls back to the snapshot in `data/realtime/*.pb` if the relay isn't set or is unreachable.
+* **Walk area** – 5-minute walkshed over the street + trail network (`walkshedMinutes` in `js/config.js`).
 
 ## Rebuild the GTFS data
 ```

@@ -7,13 +7,15 @@ window.CONFIG = {
     streets:   'https://gismaps.guelph.ca/hosting/rest/services/OpenData/OpenData1/FeatureServer/1',
     trails:    'https://gismaps.guelph.ca/hosting/rest/services/OpenData/OpenData1/FeatureServer/21'
   },
-  // GTFS-Realtime. Snapshot files in the repo for now; point these at a CORS proxy
-  // in front of Guelph Transit's live feed later and set refreshSeconds (e.g. 20).
+  // GTFS-Realtime. Guelph Transit's live feed blocks browsers (no CORS header), so it is read
+  // through a tiny Cloudflare Worker relay (see worker/). Paste the Worker's address into
+  // liveBase, e.g. 'https://guelph-transit-feed.yourname.workers.dev'. Leave it empty to use the
+  // snapshot files in data/realtime/. A ?feed=<url> query parameter overrides liveBase for testing.
   realtime: {
-    vehicles: 'data/realtime/vehiclepositions.pb',
-    alerts:   'data/realtime/alerts.pb',
-    refreshSeconds: 0
+    liveBase: '',
+    snapshot: { vehicles: 'data/realtime/vehiclepositions.pb', alerts: 'data/realtime/alerts.pb' },
+    refreshSeconds: 15
   },
   walkSpeedKmh: 4.8,
-  walkshedMinutes: 10
+  walkshedMinutes: 5
 };
