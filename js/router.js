@@ -216,24 +216,21 @@
     const i = near(A, 0), j = near(B, i);
     return [[A.lat, A.lon], ...sh.slice(i, j + 1), [B.lat, B.lon]];
   }
+  // 10-minute walkshed: every street/trail piece reachable within SHED_M, buffered into one area
   function walkshedPolygon(res) {
-    const pts = [];
-    const pushPt = (lat, lon) => pts.push(turf.point([lon, lat]));
+    const lines = [];
     for (const [a, b] of G.edges) {
       const da = res.d[a], db = res.d[b];
       if (da > SHED_M && db > SHED_M) continue;
       const [u, v, du] = da <= db ? [a, b, da] : [b, a, db];
-      const L = dist(u, v), reach = Math.min(1, (SHED_M - du) / (L || 1));
-      const steps = Math.max(1, Math.ceil(L * reach / 25));
-      for (let i = 0; i <= steps; i++) { const t = reach * i / steps; pushPt(G.ll[u][0] + (G.ll[v][0] - G.ll[u][0]) * t, G.ll[u][1] + (G.ll[v][1] - G.ll[u][1]) * t); }
+      const reach = Math.min(1, (SHED_M - du) / (dist(u, v) || 1));
+      lines.push([[G.ll[u][1], G.ll[u][0]], [G.ll[u][1] + (G.ll[v][1] - G.ll[u][1]) * reach, G.ll[u][0] + (G.ll[v][0] - G.ll[u][0]) * reach]]);
     }
-    if (pts.length < 4) return null;
-    const fc = turf.featureCollection(pts);
-    let poly = null;
-    try { poly = turf.concave(fc, { maxEdge: 0.12, units: 'kilometers' }); } catch (e) { }
-    if (!poly) poly = turf.convex(fc);
-    try { poly = turf.buffer(poly, 20, { units: 'meters' }); } catch (e) { }
-    return poly;
+    if (!lines.length) return null;
+    try {
+      const poly = turf.buffer(turf.multiLineString(lines), 55, { units: 'meters', steps: 4 });
+      return turf.simplify(poly, { tolerance: 0.00008, highQuality: false });
+    } catch (e) { console.error(e); return null; }
   }
 
   // ------------------------------------------------------------ main entry
