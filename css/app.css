@@ -16,6 +16,7 @@
   --radius:22px;
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-t:env(safe-area-inset-top,0px);
+  --bar-h:26px;              /* refresh countdown strip */
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:#E3E2DE;color:var(--ink);font:15px/1.35 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent;overflow:hidden}
@@ -70,7 +71,7 @@ html,body{margin:0;height:100%;background:#E3E2DE;color:var(--ink);font:15px/1.3
 .avatar{width:28px;height:28px;border-radius:50%;background:var(--pin-green);color:#fff;display:grid;place-items:center;font-weight:700;font-size:11px;box-shadow:0 0 0 2px #fff}
 
 /* Bottom sheet */
-.sheet{position:fixed;z-index:1000;left:0;right:0;bottom:0;background:var(--pill);border-radius:var(--radius) var(--radius) 0 0;box-shadow:0 -2px 12px rgba(0,0,0,.15);padding:6px 16px calc(12px + var(--safe-b));max-height:55vh;overflow:auto;transform:translateY(100%);transition:transform .25s}
+.sheet{position:fixed;z-index:1000;left:0;right:0;bottom:0;background:var(--pill);border-radius:var(--radius) var(--radius) 0 0;box-shadow:0 -2px 12px rgba(0,0,0,.15);padding:6px 16px calc(12px + var(--bar-h) + var(--safe-b));max-height:55vh;overflow:auto;transform:translateY(100%);transition:transform .25s}
 .sheet.open{transform:none}
 .grab{width:40px;height:4px;border-radius:2px;background:#cfd2cf;margin:2px auto 8px}
 .status{display:flex;align-items:center;gap:10px;font-size:13px}
@@ -120,7 +121,7 @@ html,body{margin:0;height:100%;background:#E3E2DE;color:var(--ink);font:15px/1.3
 .leaflet-tooltip.tip{background:var(--pill);border:0;border-radius:999px;box-shadow:var(--shadow);font:600 12px Inter,system-ui,sans-serif;color:var(--ink);padding:4px 10px}
 .leaflet-tooltip.tip:before{display:none}
 
-.sheet.collapsed{max-height:178px;overflow:hidden}
+.sheet.collapsed{max-height:calc(178px + var(--bar-h));overflow:hidden}
 .sheet.collapsed .grab{background:var(--pin-green)}
 .grab{cursor:pointer;padding:0;height:5px;width:44px}
 body.trip .credit{display:none}
@@ -159,3 +160,32 @@ body.trip .credit{display:none}
 #locateBtn.on svg{fill:var(--pin-blue)}
 #locateBtn.follow{background:var(--pin-blue)}
 #locateBtn.follow svg{fill:#fff}
+
+/* Bus-location refresh countdown: slim strip along the bottom edge */
+.refresh-bar{position:fixed;z-index:1001;left:0;right:0;bottom:0;height:calc(var(--bar-h) + var(--safe-b));padding:0 16px var(--safe-b);display:flex;align-items:center;justify-content:center;gap:10px;background:var(--pill);border-top:1px solid #e6e6e2;font:500 12px Inter,system-ui,sans-serif;color:var(--muted)}
+.refresh-bar b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.refresh-track{position:absolute;left:0;right:0;top:0;height:2px;background:transparent;overflow:hidden}
+.refresh-fill{display:block;height:100%;background:var(--pin-green);transform-origin:left;transition:transform .25s linear}
+.refresh-bar.stale .refresh-fill{background:#E8A33A}
+.refresh-bar::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--pin-green);flex:none}
+.refresh-bar.stale::before{background:#E8A33A}
+
+/* Next buses: the next bus to arrive stands out, later ones are lighter */
+.arr.next{margin:2px -6px;padding:6px;border-top:0;border-radius:10px;background:#EEF8F1}
+.arr.next .arr-h{color:var(--ink);font-weight:600}
+.arr.next + .arr{border-top:0}
+.arr.later{opacity:.55}
+.arrivals.compact .arr.next{margin:0 -4px;padding:4px}
+
+/* Search suggestions: places + addresses */
+.suggest li{display:flex;align-items:center;gap:10px}
+.sg-txt{flex:1;min-width:0;line-height:1.3}
+.sg-txt small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sg-kind{flex:none;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+.sg-ico{flex:none;width:12px;height:12px;border-radius:50%;background:#9aa09c}
+.sg-addr{background:var(--pin-blue);box-shadow:0 0 0 2px var(--pin-blue-halo)}
+.sg-facility{background:#7A4FBF;border-radius:3px}
+.sg-park{background:var(--pin-green);box-shadow:0 0 0 2px var(--pin-halo)}
+.sg-school{background:#E8A33A;border-radius:3px}
+.sg-garden{background:var(--pin-dark);box-shadow:0 0 0 2px var(--pin-dark-halo)}
+.sg-restroom{background:#1988B7}

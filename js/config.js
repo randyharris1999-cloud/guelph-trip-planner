@@ -6,6 +6,14 @@ window.CONFIG = {
     addresses: 'https://gismaps.guelph.ca/hosting/rest/services/OpenData/OpenData1/FeatureServer/0',
     streets:   'https://gismaps.guelph.ca/hosting/rest/services/OpenData/OpenData1/FeatureServer/1',
     trails:    'https://gismaps.guelph.ca/hosting/rest/services/OpenData/OpenData1/FeatureServer/21',
+    // searchable places in the From / To boxes
+    places: {
+      facilities: 'https://gismaps.guelph.ca/hosting/rest/services/OpenData/OpenData1/FeatureServer/32',
+      parks:      'https://gismaps.guelph.ca/hosting/rest/services/OpenData/OpenData1/FeatureServer/5',
+      schools:    'https://gismaps.guelph.ca/hosting/rest/services/OpenData/OpenData1/FeatureServer/36',
+      gardens:    'https://gismaps.guelph.ca/hosting/rest/services/OpenData/OpenData1/FeatureServer/18',
+      restrooms:  'https://gismaps.guelph.ca/hosting/rest/services/OpenData/OpenData1/FeatureServer/20'
+    },
     // extra walking paths joined into the walk network
     paths: [
       { url: 'https://gismaps.guelph.ca/hosting/rest/services/OpenData/OpenData2/FeatureServer/0',   // Sidewalks (incl. walkways)

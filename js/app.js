@@ -23,17 +23,24 @@
   new ResizeObserver(setPlannerH).observe($('#planner')); setPlannerH();
 
   // ---------- Static GTFS ----------
-  const [stopsJ, routes] = await Promise.all([
+  const [stopsJ, routes, offsets] = await Promise.all([
     fetch('data/gtfs/stops.json').then(r => r.json()),
-    fetch('data/gtfs/routes.json').then(r => r.json())
+    fetch('data/gtfs/routes.json').then(r => r.json()),
+    fetch('data/gtfs/route_offsets.json').then(r => r.json()).catch(() => ({}))   // ROW-based lane offsets
   ]);
   const stops = stopsJ.stops.map(([code, name, lat, lon], i) => ({ i, code, name, lat, lon }));
-  window.APP = { map, stops, routes, layers };
+  window.APP = { map, stops, routes, layers, offsets };
 
-  // Route lines (official route colours)
-  for (const r of Object.values(routes)) {
+  // Route lines (official route colours), each direction drawn in its own lane with travel arrows
+  for (const [rid, r] of Object.entries(routes)) {
     if (!/^\d/.test(r.n)) continue; // skip charters / specials
-    r.shapes.forEach(s => L.polyline(s, { pane: 'routes', color: r.c, weight: 3, opacity: .75 }).addTo(layers.routes));
+    const seen = new Set();
+    r.shapes.forEach((s, k) => {
+      const key = s.join(';'); if (seen.has(key)) return; seen.add(key);   // identical variants drawn once
+      const off = shapeOffsets(rid, k);
+      new L.OffsetLine(s, { pane: 'routes', color: r.c, weight: 3, opacity: .8, offsets: off, minPx: 2.5 }).addTo(layers.routes);
+      new L.ArrowLine(s, { pane: 'routes', color: r.c, weight: 2, opacity: .95, offsets: off, minPx: 2.5, size: 3.5, spacing: 120, minZoom: 15 }).addTo(layers.routes);
+    });
   }
 
   // Stops: green leaf pins when zoomed in, small green dots when zoomed out
@@ -141,13 +148,39 @@
   let y0 = null; $('#sheet').addEventListener('touchstart', e => y0 = e.touches[0].clientY, { passive: true });
   $('#sheet').addEventListener('touchend', e => { if (y0 === null) return; const dy = e.changedTouches[0].clientY - y0; y0 = null;
     if (Math.abs(dy) > 40 && APP.inTrip) { $('#sheet').classList.toggle('collapsed', dy > 0); openSheet(true); } });
-  await loadAlerts(); await loadVehicles();
-  if (liveBase && C.realtime.refreshSeconds > 0) {
-    // poll while the page is visible; refresh immediately when the phone comes back to the app
-    setInterval(() => { if (!document.hidden) loadVehicles(); }, C.realtime.refreshSeconds * 1000);
-    setInterval(() => { if (!document.hidden) loadAlerts(); }, 120000);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - lastOk > 5000) loadVehicles(); });
+  // ---------- Refresh countdown (strip along the bottom of the screen) ----------
+  const every = C.realtime.refreshSeconds * 1000;
+  let nextAt = 0, polling = false, pollTimer = null;
+  function tick() {
+    const bar = $('#refreshBar'); if (!bar) return;
+    let txt, frac;
+    if (polling) { txt = 'Updating bus locations…'; frac = 0; }
+    else if (!isLive) { txt = 'Live bus feed unavailable — showing snapshot positions'; frac = 0; }
+    else if (document.hidden) { txt = 'Paused'; frac = 0; }
+    else {
+      const left = Math.max(0, Math.ceil((nextAt - Date.now()) / 1000));
+      txt = `Bus locations refresh in <b>${left} s</b>`; frac = Math.max(0, Math.min(1, (nextAt - Date.now()) / every));
+    }
+    bar.classList.toggle('stale', !isLive);
+    $('#refreshTxt').innerHTML = txt;
+    $('#refreshFill').style.transform = `scaleX(${frac})`;
   }
+  async function poll() {
+    clearTimeout(pollTimer);
+    if (document.hidden) return;                       // resumes on visibilitychange
+    polling = true; tick();
+    await loadVehicles();
+    polling = false; nextAt = Date.now() + every; tick();
+    pollTimer = setTimeout(poll, every);
+  }
+  await loadAlerts();
+  if (liveBase && C.realtime.refreshSeconds > 0) {
+    await poll();
+    setInterval(tick, 250);
+    setInterval(() => { if (!document.hidden) loadAlerts(); }, 120000);
+    // refresh immediately when the phone comes back to the app
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (Date.now() - lastOk > 5000) poll(); else { clearTimeout(pollTimer); nextAt = lastOk + every; pollTimer = setTimeout(poll, Math.max(0, nextAt - Date.now())); } } tick(); });
+  } else { await loadVehicles(); tick(); }
 
   // ---------- Trails (City of Guelph, live service) ----------
   let trailsLoaded = false;
@@ -168,40 +201,89 @@
     on ? layers[k].addTo(map) : map.removeLayer(layers[k]);
   });
 
-  // ---------- Address search (City of Guelph Addresses layer) ----------
+  // ---------- Search: addresses + City places (facilities, parks, schools, gardens, restrooms) ----------
   const sel = { from: null, to: null };
   const sug = $('#suggest'); let activeInput = null, timer;
   async function searchAddr(q) {
     q = q.trim().toUpperCase().replace(/'/g, "''");
-    if (q.length < 3) return [];
+    if (q.length < 3 || !/\d/.test(q)) return [];   // street addresses start with a number
     const where = encodeURIComponent(`UPPER(ADDRESS) LIKE '${q}%' AND (UNIT_NO IS NULL OR UNIT_NO = '')`);
-    const url = `${C.gis.addresses}/query?where=${where}&outFields=ADDRESS,POSTCODE,LAT,LONG&orderByFields=ADDRESS&resultRecordCount=8&returnGeometry=false&f=json`;
+    const url = `${C.gis.addresses}/query?where=${where}&outFields=ADDRESS,POSTCODE,LAT,LONG&orderByFields=ADDRESS&resultRecordCount=6&returnGeometry=false&f=json`;
     const j = await fetch(url).then(r => r.json());
-    return (j.features || []).map(f => f.attributes);
+    return (j.features || []).map(f => f.attributes).map(a => ({ kind: 'addr', name: a.ADDRESS, sub: `Guelph ${a.POSTCODE || ''}`, lat: a.LAT, lon: a.LONG }));
   }
+  // Title-case City data names but keep school / agency acronyms ("ST. PAUL CS" → "St. Paul CS")
+  const KEEP = new Set(['CS', 'PS', 'CVI', 'SS', 'CI', 'GRCA', 'YMCA', 'YWCA', 'II', 'III']);
+  const nice = s => (s || '').trim().toLowerCase().replace(/[a-z0-9.'’-]+/g, w => KEEP.has(w.toUpperCase()) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1))
+    .replace(/\bMc([a-z])/g, (m, c) => 'Mc' + c.toUpperCase()).replace(/ (Rd|St|Dr|Ave|Cres|Pl|Blvd|Ct) ([nsew])\b/gi, (m, a, d) => ` ${a} ${d.toUpperCase()}`);
+  let places = null;
+  function loadPlaces() {
+    if (places) return places;
+    const get = (url, where, fields) => fetch(`${url}/query?where=${encodeURIComponent(where)}&outFields=${fields}&outSR=4326&geometryPrecision=6&f=geojson`)
+      .then(r => r.json()).then(g => g.features || []).catch(e => { console.warn('place layer failed', url, e); return []; });
+    const pt = f => f.geometry && f.geometry.type === 'Point' ? { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] } : null;
+    // parks: route to the edge of the park closest to its middle (usually a street frontage), not the middle of a field
+    const parkPt = f => {
+      try {
+        const c = turf.centroid(f), edge = turf.nearestPointOnLine(turf.polygonToLine(f.geometry.type === 'MultiPolygon' ? turf.polygon(f.geometry.coordinates[0]) : f), c);
+        return { lat: edge.geometry.coordinates[1], lon: edge.geometry.coordinates[0], clat: c.geometry.coordinates[1], clon: c.geometry.coordinates[0] };
+      } catch (e) { return null; }
+    };
+    const P = C.gis.places;
+    places = Promise.all([
+      get(P.facilities, '1=1', 'NAME,ADDRESS,CATEGORY').then(fs => fs.map(f => ({ kind: 'facility', name: nice(f.properties.NAME), sub: `${nice(f.properties.CATEGORY)} · ${nice(f.properties.ADDRESS)}`, tags: f.properties.CATEGORY, ...pt(f) }))),
+      get(P.parks, "ParkStatus = 'IN-USE'", 'ParkName,Name,Address').then(fs => fs.map(f => ({ kind: 'park', name: f.properties.Name || nice(f.properties.ParkName), sub: `Park${f.properties.Address ? ' · ' + f.properties.Address : ''}`, tags: 'park', ...parkPt(f) }))),
+      get(P.schools, '1=1', 'NAME,ADDRESS,TYPE,BOARD,STATUS').then(fs => fs.filter(f => /active/i.test(f.properties.STATUS || 'active')).map(f => ({ kind: 'school', name: nice(f.properties.NAME), sub: `${nice(f.properties.TYPE)} school · ${nice(f.properties.ADDRESS)}`, tags: 'school ' + (f.properties.BOARD || ''), ...pt(f) }))),
+      get(P.gardens, "Status = 'IN-USE'", 'Name,Address,GardenType').then(fs => fs.filter(f => f.properties.Name).map(f => ({ kind: 'garden', name: nice(f.properties.Name), sub: `Community garden${f.properties.Address ? ' · ' + nice(f.properties.Address) : ''}`, tags: 'community garden ' + (f.properties.GardenType || ''), ...pt(f) }))),
+      get(P.restrooms, "Status = 'IN-USE' AND OpenToPublic = 'Yes'", 'ParkName,RestroomType,LocationDescription').then(fs => fs.filter(f => f.properties.ParkName).map(f => ({ kind: 'restroom', name: `Restroom · ${nice(f.properties.ParkName)}`, sub: nice(f.properties.RestroomType) + (f.properties.LocationDescription ? ' · ' + f.properties.LocationDescription.toLowerCase() : ''), tags: 'restroom washroom toilet bathroom', ...pt(f) })))
+    ]).then(all => {
+      const seen = new Set();   // the source layers repeat some entries (e.g. one garden per plot)
+      return all.flat().filter(p => p.lat != null && p.name && !seen.has(p.kind + p.name + p.sub) && seen.add(p.kind + p.name + p.sub))
+        .map(p => ({ ...p, key: (p.name + ' ' + p.tags).toLowerCase() }));
+    });
+    return places;
+  }
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  async function searchPlaces(q) {
+    q = norm(q); if (q.length < 2) return [];
+    const words = q.split(' '), list = await loadPlaces(), out = [];
+    for (const p of list) {
+      const key = norm(p.key), name = norm(p.name);
+      if (!words.every(w => key.includes(w))) continue;
+      const score = (name.startsWith(q) ? 0 : 2) + (words.every(w => (' ' + key).includes(' ' + w)) ? 0 : 1);   // whole-name, then word-start matches first
+      out.push([score, p]);
+    }
+    return out.sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name)).slice(0, 6).map(x => x[1]);
+  }
+  async function search(q) {
+    const [pl, ad] = await Promise.all([searchPlaces(q).catch(() => []), searchAddr(q).catch(() => [])]);
+    return /^\s*\d/.test(q) ? [...ad, ...pl] : [...pl, ...ad];
+  }
+  const KIND = { addr: 'Address', facility: 'City facility', park: 'Park', school: 'School', garden: 'Garden', restroom: 'Restroom' };
   function bindInput(input, key) {
+    input.addEventListener('focus', () => loadPlaces(), { once: true });   // warm the place list
     input.addEventListener('input', () => {
       sel[key] = null; activeInput = { input, key }; clearTimeout(timer);
       timer = setTimeout(async () => {
-        const res = await searchAddr(input.value).catch(() => []);
-        sug.innerHTML = res.map((a, i) => `<li role="option" data-i="${i}">${a.ADDRESS}<br><small>Guelph ${a.POSTCODE || ''}</small></li>`).join('');
+        const res = await search(input.value);
+        sug.innerHTML = res.map((a, i) => `<li role="option" data-i="${i}"><span class="sg-ico sg-${a.kind}" aria-hidden="true"></span><span class="sg-txt">${a.name}<br><small>${a.sub}</small></span><span class="sg-kind">${KIND[a.kind]}</span></li>`).join('');
         sug.hidden = !res.length;
         sug.querySelectorAll('li').forEach(li => li.onclick = () => choose(res[+li.dataset.i]));
-      }, 200);
+      }, 180);
     });
     input.addEventListener('keydown', e => { if (e.key === 'Enter' && !sug.hidden) { e.preventDefault(); sug.querySelector('li')?.click(); } });
   }
   function choose(a) {
     const { input, key } = activeInput;
-    input.value = a.ADDRESS; sel[key] = { name: a.ADDRESS, lat: a.LAT, lon: a.LONG };
+    input.value = a.name; sel[key] = { name: a.name, lat: a.lat, lon: a.lon };
     sug.hidden = true; input.blur(); drawEnds();
   }
   bindInput($('#fromInput'), 'from'); bindInput($('#toInput'), 'to');
 
   async function resolve(key, input) {
     if (sel[key]) return sel[key];
-    const r = await searchAddr(input.value); if (!r.length) return null;
-    return sel[key] = { name: r[0].ADDRESS, lat: r[0].LAT, lon: r[0].LONG };
+    const r = await search(input.value); if (!r.length) return null;
+    return sel[key] = { name: r[0].name, lat: r[0].lat, lon: r[0].lon };
   }
   function drawEnds() {
     layers.trip.clearLayers();
@@ -261,6 +343,7 @@
   };
   map.on('dragstart', () => setFollow(false));
   $('#goBtn').onclick = async () => {
+    sug.hidden = true; clearTimeout(timer);
     const a = await resolve('from', $('#fromInput')), b = await resolve('to', $('#toInput'));
     if (!a || !b) { alertSheet('Choose a start and a destination address in Guelph.'); return; }
     drawEnds();

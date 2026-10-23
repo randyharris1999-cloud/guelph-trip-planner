@@ -270,13 +270,45 @@
   // ------------------------------------------------------------ drawing helpers
   const fmt = sec => { sec = Math.round(sec); let h = Math.floor(sec / 3600) % 24, m = Math.floor(sec % 3600 / 60); const ap = h < 12 ? 'a.m.' : 'p.m.'; h = h % 12 || 12; return `${h}:${String(m).padStart(2, '0')} ${ap}`; };
   const mins = sec => Math.max(1, Math.round(sec / 60));
-  function shapeSlice(p, fromStop, toStop) {
-    const pat = sched.patterns[p], r = APP.routes[pat.r], sh = r.shapes[pat.sh];
-    const A = APP.stops[fromStop], B = APP.stops[toStop];
-    if (!sh) return [[A.lat, A.lon], [B.lat, B.lon]];
-    const near = (pt, from) => { let bi = from, bd = Infinity; for (let i = from; i < sh.length; i++) { const d = (sh[i][0] - pt.lat) ** 2 + (sh[i][1] - pt.lon) ** 2; if (d < bd) { bd = d; bi = i; } } return bi; };
-    const i = near(A, 0), j = near(B, i);
-    return [[A.lat, A.lon], ...sh.slice(i, j + 1), [B.lat, B.lon]];
+  // Where each stop of a pattern sits along its shape. Stops are matched IN ORDER, each one at or
+  // after the previous, so a stop the bus passes twice (e.g. Macdonell at Wilson, on the way into
+  // Central Station and again on the way out) is matched to the pass the bus actually serves it on.
+  const patMatch = new Map();
+  function matchPattern(p) {
+    if (patMatch.has(p)) return patMatch.get(p);
+    const pat = sched.patterns[p], sh = APP.routes[pat.r].shapes[pat.sh];
+    if (!sh) { patMatch.set(p, null); return null; }
+    const P = sh.map(([la, lo]) => toXY(la, lo)), out = [];
+    let seg = 0, t0 = 0;
+    for (const si of pat.s) {
+      const s = APP.stops[si], [x, y] = toXY(s.lat, s.lon);
+      let best = null, firstClose = null;
+      for (let i = seg; i < P.length - 1; i++) {
+        const [ax, ay] = P[i], dx = P[i + 1][0] - ax, dy = P[i + 1][1] - ay, L2 = dx * dx + dy * dy || 1e-9;
+        let t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L2)); if (i === seg) t = Math.max(t, t0);
+        const d = Math.hypot(ax + dx * t - x, ay + dy * t - y), m = { seg: i, t, d };
+        if (!best || d < best.d) best = m;
+        if (firstClose) { if (d < firstClose.d) firstClose = m; else if (d > firstClose.d + 15) break; }   // end of this pass
+        else if (d < 40) firstClose = m;                                                                     // first pass within 40 m
+      }
+      const m = firstClose || best || { seg, t: t0 };
+      out.push(m); seg = m.seg; t0 = m.t;
+    }
+    patMatch.set(p, out); return out;
+  }
+  // the ride between pattern positions b and a: route line points + per-point lane offsets (m)
+  function shapeSlice(p, b, a) {
+    const pat = sched.patterns[p], sh = APP.routes[pat.r].shapes[pat.sh], M = matchPattern(p);
+    const A = APP.stops[pat.s[b]], B = APP.stops[pat.s[a]];
+    if (!sh || !M) return { ll: [[A.lat, A.lon], [B.lat, B.lon]], off: [] };
+    const off = shapeOffsets(pat.r, pat.sh);
+    const at = m => { const i = m.seg, j = Math.min(i + 1, sh.length - 1), o1 = off[i], o2 = off[j];
+      return { ll: [sh[i][0] + (sh[j][0] - sh[i][0]) * m.t, sh[i][1] + (sh[j][1] - sh[i][1]) * m.t],
+               off: o1 == null ? o2 : o2 == null ? o1 : o1 + (o2 - o1) * m.t }; };
+    const s = at(M[b]), e = at(M[a]), ll = [s.ll], o = [s.off];
+    for (let i = M[b].seg + 1; i <= M[a].seg; i++) { ll.push(sh[i]); o.push(off[i]); }
+    ll.push(e.ll); o.push(e.off);
+    return { ll, off: o };
   }
   // N-minute walkshed: every street/trail/path piece reachable within SHED_M, drawn ~55 m wide as one area.
   // Built on a 15 m grid (stamp each reachable segment, smooth, trace the outline) — fast at any network density.
@@ -369,9 +401,11 @@
           steps.push(stepWalk(`Walk to <b>${b.name}</b> <span class="muted">#${b.code}</span>`, leg.sec)); continue;
         }
         const pat = sched.patterns[leg.p], r = APP.routes[pat.r];
-        const line = shapeSlice(leg.p, leg.from, leg.to);
-        L.polyline(line, { pane: 'walk', color: '#fff', weight: 9, opacity: .9 }).addTo(L_);
-        L.polyline(line, { pane: 'walk', color: r.c, weight: 6 }).addTo(L_);
+        // ride drawn in the bus's own lane (right-hand side of the ROW) with arrows showing the direction of travel
+        const { ll: line, off } = shapeSlice(leg.p, leg.b, leg.a);
+        new L.OffsetLine(line, { pane: 'walk', color: '#fff', weight: 10, opacity: .95, offsets: off, minPx: 3 }).addTo(L_);
+        new L.OffsetLine(line, { pane: 'walk', color: r.c, weight: 7, offsets: off, minPx: 3 }).addTo(L_);
+        new L.ArrowLine(line, { pane: 'walk', color: '#fff', weight: 2.2, offsets: off, minPx: 3, size: 3.2, spacing: 70, minZoom: 13 }).addTo(L_);
         line.forEach(x => bounds.extend(x));
         for (const sidx of [leg.from, leg.to]) { const s = APP.stops[sidx]; L.marker([s.lat, s.lon], { icon: Icons.pin('stop'), pane: 'pins' }).bindPopup(Icons.popEl(`<div class="pop-title">${s.name}</div><span class="muted">Stop #${s.code} · next buses</span><div class="arrivals" data-stopidx="${sidx}"></div>`)).addTo(L_); }
         const live = APP.vehicles?.find(v => v.tripId === leg.trip[3]);
@@ -452,7 +486,7 @@
   function arrivalRows(list) {
     const sk = list.skipped && list.skipped.size ? `<div class="skip-note">⚠ ${[...list.skipped].map(r => `<span class="badge" style="background:${r.c};color:#fff">${r.n}</span>`).join(' ')} buses are skipping this stop right now (detour / closure)</div>` : '';
     if (!list.length) return sk || '<div class="muted">No buses in the next 90 min</div>';
-    return sk + list.map(a => `<div class="arr"><span class="badge" style="background:${a.r.c};color:#fff">${a.r.n}</span>
+    return sk + list.map((a, i) => `<div class="arr ${i ? 'later' : 'next'}"><span class="badge" style="background:${a.r.c};color:#fff">${a.r.n}</span>
       <span class="arr-h">${a.head.replace(/^\S+\s*/, '').trim() || a.r.name}</span>
       <span class="arr-t"><b>${etaTxt(a.eta)}</b><small class="${a.live ? 'is-live' : ''}">${a.live ? '● live · ' + lateTxt(a.late) : 'scheduled'}</small></span></div>`).join('');
   }
@@ -482,6 +516,7 @@
       refreshArrivals().then(() => e.popup.update()).catch(console.error);
     });
     APP.arrivalsAt = arrivalsAt;
+    APP.rideLine = async (p, b, a) => { await loadSchedule(); return shapeSlice(p, b, a); };   // for checking how a ride is drawn
   })();
   setInterval(() => { if (!document.hidden) refreshArrivals(true).catch(console.error); }, 30000);
 
