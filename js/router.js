@@ -299,13 +299,15 @@
 
     const arr = useTransit ? plan.arr : t0 + walkSec;
     const cs = closest && APP.stops[closest[0]];
-    APP.sheet(`<div class="sum"><div><div class="big">${mins(arr - t0)} min</div><span class="muted">${fmt(t0)} → ${fmt(arr)}</span></div>
+    const legsBadges = useTransit ? plan.legs.filter(l => l.type === 'ride').map(l => { const r = APP.routes[sched.patterns[l.p].r]; return `<span class="badge" style="background:${r.c};color:#fff">${r.n}</span>`; }).join('<span class="chev">›</span>') : '<span class="muted">Walk only</span>';
+    APP.sheet(`<div class="sum"><div><div class="big">${mins(arr - t0)} min <span class="legs">${legsBadges}</span></div><span class="muted">${fmt(t0)} → ${fmt(arr)}</span></div>
       <label class="dep">Leave at <input type="time" id="depTime" value="${new Date((t0 % 86400) * 1000).toISOString().slice(11, 16)}"></label></div>
       ${cs ? `<div class="closest"><span class="lg-pin">${Icons.svg('stop', 18, 23)}</span>Closest stop: <b>${cs.name}</b> #${cs.code} · ${mins(closest[1])} min walk</div>` : ''}
       <ol class="steps">${steps.join('')}</ol>
-      <div class="muted shed-note"><span class="shed-swatch"></span>Shaded area = everywhere within a ${C.walkshedMinutes}-minute walk of your start (streets + trails).</div>`);
+      <div class="muted shed-note"><span class="shed-swatch"></span>Shaded area = everywhere within a ${C.walkshedMinutes}-minute walk of your start (streets + trails).</div>
+      <button class="go-btn ghost" id="clearTrip">Clear trip</button>`, true);
     $('#depTime').onchange = e => { const [h, m] = e.target.value.split(':'); APP.departSecs = +h * 3600 + +m * 60; window.planTrip(from, to); };
-    map.fitBounds(bounds, { paddingTopLeft: [20, $('#planner').offsetHeight + 60], paddingBottomRight: [20, Math.min($('#sheet').offsetHeight, innerHeight * .45) + 20] });
+    map.fitBounds(bounds, { paddingTopLeft: [20, $('#planner').offsetHeight + 60], paddingBottomRight: [60, $('#sheet').offsetHeight + 20] });
   };
   function stepWalk(html, sec, time) {
     return `<li class="step walk"><span class="walk-ico">${Icons.svg('walk', 20, 26)}</span><div>${html}<br><span class="muted">${mins(sec)} min walk${time ? ' · ' + time : ''}</span></div></li>`;

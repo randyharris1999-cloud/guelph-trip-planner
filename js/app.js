@@ -95,7 +95,22 @@
     $('#sheet').classList.toggle('open', on);
     requestAnimationFrame(() => document.documentElement.style.setProperty('--sheet-h', on ? $('#sheet').offsetHeight + 'px' : '0px'));
   }
-  APP.sheet = html => { APP.inTrip = true; $('#sheetBody').innerHTML = html; openSheet(true); };
+  APP.sheet = (html, collapsed) => {
+    APP.inTrip = true; document.body.classList.add('trip');
+    $('#sheetBody').innerHTML = html; $('#sheet').classList.toggle('collapsed', !!collapsed); openSheet(true);
+    const x = $('#clearTrip'); if (x) x.onclick = APP.clearTrip;
+  };
+  APP.clearTrip = () => {
+    APP.inTrip = false; document.body.classList.remove('trip'); layers.trip.clearLayers(); APP.departSecs = null;
+    $('#fromInput').value = $('#toInput').value = ''; sel.from = sel.to = null;
+    $('#sheet').classList.remove('collapsed'); status(layers.buses.getLayers().length);
+  };
+  // tap the handle (or swipe) to expand / collapse trip details
+  const toggleSheet = () => { if (!APP.inTrip) return; $('#sheet').classList.toggle('collapsed'); openSheet(true); };
+  $('.grab').onclick = toggleSheet;
+  let y0 = null; $('#sheet').addEventListener('touchstart', e => y0 = e.touches[0].clientY, { passive: true });
+  $('#sheet').addEventListener('touchend', e => { if (y0 === null) return; const dy = e.changedTouches[0].clientY - y0; y0 = null;
+    if (Math.abs(dy) > 40 && APP.inTrip) { $('#sheet').classList.toggle('collapsed', dy > 0); openSheet(true); } });
   await loadAlerts(); await loadVehicles();
   if (C.realtime.refreshSeconds > 0) setInterval(loadVehicles, C.realtime.refreshSeconds * 1000);
 
