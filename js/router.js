@@ -355,7 +355,7 @@
     const sk = list.skipped && list.skipped.size ? `<div class="skip-note">⚠ ${[...list.skipped].map(r => `<span class="badge" style="background:${r.c};color:#fff">${r.n}</span>`).join(' ')} buses are skipping this stop right now (detour / closure)</div>` : '';
     if (!list.length) return sk || '<div class="muted">No buses in the next 90 min</div>';
     return sk + list.map(a => `<div class="arr"><span class="badge" style="background:${a.r.c};color:#fff">${a.r.n}</span>
-      <span class="arr-h">${a.head.replace(/^\S+\s/, '')}</span>
+      <span class="arr-h">${a.head.replace(/^\S+\s*/, '').trim() || a.r.name}</span>
       <span class="arr-t"><b>${etaTxt(a.eta)}</b><small class="${a.live ? 'is-live' : ''}">${a.live ? '● live · ' + lateTxt(a.late) : 'scheduled'}</small></span></div>`).join('');
   }
   async function refreshArrivals(force) {
